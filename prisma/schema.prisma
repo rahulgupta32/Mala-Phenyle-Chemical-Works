@@ -1,0 +1,452 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User & Profiles
+enum Role {
+  CUSTOMER
+  WHOLESALE
+  DELIVERY
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_APPROVAL
+  REJECTED
+  SUSPENDED
+}
+
+model User {
+  id                   String                 @id @default(uuid())
+  email                String                 @unique
+  password             String
+  role                 Role                   @default(CUSTOMER)
+  name                 String
+  phone                String?
+  status               UserStatus             @default(ACTIVE)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  profile              CustomerProfile?
+  addresses            Address[]
+  orders               Order[]
+  reviews              Review[]
+  wishlist             Wishlist[]
+  wholesaleApplications WholesaleApplication[]
+  quotationRequests    QuotationRequest[]
+  adminLogs            AdminActivityLog[]
+  deliveryAssignments  DeliveryAssignment[]
+  inventoryLogs        InventoryLog[]
+  cart                 Cart?
+}
+
+model CustomerProfile {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName           String?
+  panNumber             String?
+  approvedForWholesale  Boolean  @default(false)
+  minOrderValue         Decimal? @db.Decimal(10, 2)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Address {
+  id               String   @id @default(uuid())
+  userId           String?  // Nullable for guest checkout
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String   // Recipient Name
+  mobile           String   // Recipient Mobile
+  province         String
+  district         String
+  municipality     String
+  ward             String
+  street           String
+  landmark         String?
+  googleMapsLink   String?
+  isDefault        Boolean  @default(false)
+  orders           Order[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// System Configurations
+model ShopSettings {
+  id                       String   @id @default("default")
+  businessName             String   @default("Mala Phenyle Chemical Works")
+  businessAddress          String   @default("Birgunj, Nepal")
+  supportEmail             String   @default("Sunilgupta335566@gmail.com")
+  supportPhone             String   @default("+977 9855033186")
+  supportPhoneAlternative  String?  @default("+977 9845034186")
+  whatsappViber            String   @default("+977 9855033186")
+  freeDeliveryThreshold    Decimal  @default(2000.00) @db.Decimal(10, 2)
+  minWholesaleOrderAmount  Decimal  @default(10000.00) @db.Decimal(10, 2)
+  announcementText         String   @default("Welcome to Mala Phenyle Chemical Works! We deliver cleaning products Nepal-wide.")
+  codEnabled               Boolean  @default(true)
+  esewaEnabled             Boolean  @default(false)
+  khaltiEnabled            Boolean  @default(false)
+  fonepayEnabled           Boolean  @default(false)
+  facebookUrl              String?  @default("https://facebook.com")
+  instagramUrl             String?  @default("https://instagram.com")
+  updatedAt                DateTime @updatedAt
+}
+
+// Catalog Models
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  OUT_OF_STOCK
+  ARCHIVED
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  image       String?
+  status      Boolean   @default(true) // Active or Inactive
+  parentId    String?
+  parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Category[] @relation("CategoryParent")
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id                String             @id @default(uuid())
+  name              String
+  slug              String             @unique
+  description       String
+  shortDescription  String
+  categoryId        String
+  category          Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  retailPrice       Decimal            @db.Decimal(10, 2)
+  wholesalePrice    Decimal            @db.Decimal(10, 2)
+  discountedPrice   Decimal?           @db.Decimal(10, 2) // Optional sale price
+  sku               String             @unique
+  barcode           String?
+  stock             Int                @default(0) // Aggregated or default variant stock
+  lowStockThreshold Int                @default(5)
+  status            ProductStatus      @default(DRAFT)
+  weightVolume      String             @default("1L") // Default variant size e.g. "1L"
+  usageInstructions String?
+  safetyInstructions String?
+  ingredients       String?
+  mfgDate           DateTime?
+  expiryDate        DateTime?
+  ratingsAverage    Float              @default(0.0)
+  ratingsCount      Int                @default(0)
+  images            ProductImage[]
+  variants          ProductVariant[]
+  orderItems        OrderItem[]
+  reviews           Review[]
+  wishlistItems     Wishlist[]
+  cartItems         CartItem[]
+  inventoryLogs     InventoryLog[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model ProductImage {
+  id         String   @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url        String
+  isFeatured Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model ProductVariant {
+  id              String         @id @default(uuid())
+  productId       String
+  product         Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name            String         // e.g. "500ml", "1L", "5L", "Carton (12x1L)"
+  sku             String         @unique
+  retailPrice     Decimal        @db.Decimal(10, 2)
+  wholesalePrice  Decimal        @db.Decimal(10, 2)
+  discountedPrice Decimal?       @db.Decimal(10, 2)
+  stock           Int            @default(0)
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  inventoryLogs   InventoryLog[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// Inventory Logging
+enum InventoryLogType {
+  IN
+  OUT
+  ADJUSTMENT
+  RESTORED
+}
+
+model InventoryLog {
+  id         String           @id @default(uuid())
+  productId  String
+  product    Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId  String?
+  variant    ProductVariant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  quantity   Int              // Positive for additions, negative for reductions
+  type       InventoryLogType
+  notes      String?
+  adminId    String?          // Admin who made change (null if auto-system)
+  admin      User?            @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdAt  DateTime         @default(now())
+}
+
+// Shopping Cart (Persisted in DB for registered customers)
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String          @id @default(uuid())
+  cartId    String
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([cartId, productId, variantId])
+}
+
+// Orders Workflow
+enum PaymentMethod {
+  COD
+  ESEWA
+  KHALTI
+  BANK_TRANSFER
+  FONEPAY_QR
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKED
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+model Order {
+  id                  String               @id @default(uuid())
+  orderNumber         String               @unique // format MALA-YYYY-000001
+  userId              String?              // Nullable for guest checkouts
+  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  addressId           String
+  address             Address              @relation(fields: [addressId], references: [id])
+  totalAmount         Decimal              @db.Decimal(10, 2)
+  deliveryCharge      Decimal              @db.Decimal(10, 2)
+  discountAmount      Decimal              @db.Decimal(10, 2) @default(0.00)
+  grandTotal          Decimal              @db.Decimal(10, 2)
+  paymentMethod       PaymentMethod        @default(COD)
+  paymentStatus       PaymentStatus        @default(PENDING)
+  orderStatus         OrderStatus          @default(PENDING)
+  notes               String?              // Customer special instructions
+  trackingNote        String?              // Latest delivery note/milestone
+  guestName           String?              // For guests
+  guestPhone          String?              // For guests
+  guestEmail          String?              // For guests (optional)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  items               OrderItem[]
+  payments            Payment[]
+  deliveryAssignments DeliveryAssignment[]
+}
+
+model OrderItem {
+  id        String          @id @default(uuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id])
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  name      String          // Cached product + variant name
+  quantity  Int
+  price     Decimal         @db.Decimal(10, 2)
+  total     Decimal         @db.Decimal(10, 2)
+  createdAt DateTime        @default(now())
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount        Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       // Gateway ref code
+  payload       String?       // Raw gateway payload callback dump
+  createdAt     DateTime      @default(now())
+}
+
+// Operations Models
+model DeliveryZone {
+  id                    String   @id @default(uuid())
+  name                  String   // e.g. "Birgunj Central", "Kathmandu Valley"
+  province              String
+  district              String
+  deliveryFee           Decimal  @db.Decimal(10, 2)
+  freeDeliveryMinAmount Decimal? @db.Decimal(10, 2)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Coupon {
+  id              String       @id @default(uuid())
+  code            String       @unique
+  discountType    DiscountType @default(PERCENTAGE)
+  discountValue   Decimal      @db.Decimal(10, 2)
+  minOrderAmount  Decimal?     @db.Decimal(10, 2)
+  expiryDate      DateTime
+  usageLimit      Int?
+  usageCount      Int          @default(0)
+  status          Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int      // 1 to 5 stars
+  comment    String?
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+// B2B Wholesale Module
+enum WholesaleAppStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WholesaleApplication {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName  String
+  panNumber    String
+  businessType String             // e.g. "Distributor", "Retailer", "Hotel/Industrial"
+  documentUrl  String?            // Proof of registration file
+  status       WholesaleAppStatus @default(PENDING)
+  adminNotes   String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+enum QuoteStatus {
+  PENDING
+  RESPONDED
+  CLOSED
+}
+
+model QuotationRequest {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        QuoteStatus @default(PENDING)
+  items         Json        // Array of items requested with quantities
+  notes         String?     // Client description
+  responseNotes String?     // Admin pricing remarks
+  quoteAmount   Decimal?    @db.Decimal(10, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// Banners Manager
+model Banner {
+  id        String   @id @default(uuid())
+  title     String
+  subtitle  String?
+  imageUrl  String
+  linkUrl   String?
+  active    Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Activity Logging
+model AdminActivityLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "CREATE_PRODUCT", "UPDATE_ORDER_STATUS"
+  details   String
+  createdAt DateTime @default(now())
+}
+
+// Delivery Staff Flow
+enum DeliveryStatus {
+  ASSIGNED
+  DELIVERED
+  FAILED
+}
+
+model DeliveryAssignment {
+  id              String         @id @default(uuid())
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  deliveryStaffId String
+  deliveryStaff   User           @relation(fields: [deliveryStaffId], references: [id], onDelete: Cascade)
+  status          DeliveryStatus @default(ASSIGNED)
+  notes           String?        // Delivery remarks
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model YearlyOrderSequence {
+  year     Int @id
+  sequence Int @default(0)
+}
