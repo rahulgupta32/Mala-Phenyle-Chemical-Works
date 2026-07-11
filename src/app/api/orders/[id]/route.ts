@@ -3,6 +3,9 @@ import { db } from 'src/lib/db';
 import { getAuthUser } from 'src/lib/auth';
 import { OrderStatus, PaymentStatus, DeliveryStatus, InventoryLogType } from '@prisma/client';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // 1. Get single order details
 export async function GET(
   request: NextRequest,

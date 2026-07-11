@@ -3,6 +3,9 @@ import { db } from 'src/lib/db';
 import { getAuthUser } from 'src/lib/auth';
 import { ProductStatus, InventoryLogType } from '@prisma/client';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Helper to slugify product names
 function slugify(text: string) {
   return text

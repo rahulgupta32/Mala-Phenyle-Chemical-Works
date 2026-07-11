@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser, getDbUser } from 'src/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const session = await getAuthUser();
   

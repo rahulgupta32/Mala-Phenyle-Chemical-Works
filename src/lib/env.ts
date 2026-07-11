@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+const dbUrl = process.env.DATABASE_URL;
+const directUrl = process.env.DIRECT_URL;
+
+// Safe diagnostics
+console.log('--- Env Diagnostics ---');
+console.log('DATABASE_URL exists:', !!dbUrl);
+if (dbUrl) {
+  console.log('DATABASE_URL starts with postgresql:// or postgres://:', dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://'));
+}
+console.log('DIRECT_URL exists:', !!directUrl);
+if (directUrl) {
+  console.log('DIRECT_URL starts with postgresql:// or postgres://:', directUrl.startsWith('postgresql://') || directUrl.startsWith('postgres://'));
+}
+console.log('-----------------------');
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid connection string"),
   DIRECT_URL: z.string().url("DIRECT_URL must be a valid connection string").optional(),
@@ -21,11 +36,8 @@ const parsed = envSchema.safeParse({
 });
 
 if (!parsed.success) {
-  console.warn('⚠️  Invalid environment variables configured:', parsed.error.format());
-  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build' || !!process.env.CI;
-  if (process.env.NODE_ENV === 'production' && !isBuildPhase) {
-    throw new Error('CRITICAL: Environment variable validation failed in production. Please check .env values.');
-  }
+  console.error('❌ Environment variable validation failed:', parsed.error.format());
+  throw new Error('CRITICAL: Environment variable validation failed. Please check .env values.');
 }
 
-export const env = parsed.success ? parsed.data : {} as any;
+export const env = parsed.data;

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from 'src/lib/db';
 import { getAuthUser } from 'src/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Helper to get or create a cart for the user
 async function getOrCreateCart(userId: string) {
   let cart = await db.cart.findUnique({

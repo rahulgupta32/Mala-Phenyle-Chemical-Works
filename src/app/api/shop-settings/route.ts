@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from 'src/lib/db';
 import { getAuthUser } from 'src/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // 1. Fetch current settings
 export async function GET() {
   try {

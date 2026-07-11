@@ -3,6 +3,9 @@ import { db } from 'src/lib/db';
 import { getAuthUser } from 'src/lib/auth';
 import { OrderStatus } from '@prisma/client';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getAuthUser();
